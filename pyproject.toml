@@ -13,7 +13,7 @@ authors = [
     {name = "dclavijo", email = "dclavijo@example.com"}
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "fastmcp>=2.0.0",
 ]
 
 [project.optional-dependencies]

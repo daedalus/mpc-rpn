@@ -1,77 +1,59 @@
-from typing import Any
+from fastmcp import FastMCP
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
-
-from ._core import CalculatorSession
+from mcp_rpn._core import CalculatorSession
 
 __version__ = "0.1.0"
-__all__ = ["__version__"]
+__all__ = ["__version__", "mcp"]
 
-server = Server("mcp-rpn")
+mcp = FastMCP("mcp-rpn")
 session = CalculatorSession()
 
 
-@server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
-async def list_tools() -> list[Tool]:
-    return [
-        Tool(
-            name="evaluate",
-            description="Evaluate an RPN (Reverse Polish Notation) expression. "
-            "Operators: +, -, *, /, **, % (add, subtract, multiply, divide, power, modulo). "
-            "Commands: clear (clear stack), dup (duplicate top), swap (swap top two). "
-            "Example: '3 4 +' returns 7",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "expression": {
-                        "type": "string",
-                        "description": "Space-separated RPN expression (e.g., '3 4 +')",
-                    },
-                    "show_stack": {
-                        "type": "boolean",
-                        "description": "Return full stack after evaluation",
-                        "default": False,
-                    },
-                },
-                "required": ["expression"],
-            },
-        ),
-        Tool(
-            name="clear",
-            description="Clear the RPN calculator stack",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-    ]
+@mcp.tool()
+def evaluate(expression: str, show_stack: bool = False) -> str:
+    """Evaluate an RPN (Reverse Polish Notation) expression.
+
+    Operators: +, -, *, /, **, % (add, subtract, multiply, divide, power, modulo).
+    Commands: clear (clear stack), dup (duplicate top), swap (swap top two).
+    Example: '3 4 +' returns 7
+
+    Args:
+        expression: Space-separated RPN expression (e.g., "3 4 +").
+        show_stack: Whether to return full stack after evaluation (default: False).
+
+    Returns:
+        The computed result as a string, or error message if evaluation failed.
+
+    Example:
+        >>> evaluate("3 4 +")
+        'Result: 7'
+    """
+    result = session.evaluate(expression, show_stack)
+    if result["error"]:
+        return f"Error: {result['error']}"
+    output = f"Result: {result['result']}"
+    if show_stack and result["stack"]:
+        output += f"\nStack: {result['stack']}"
+    return output
 
 
-@server.call_tool()  # type: ignore[untyped-decorator]
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    if name == "evaluate":
-        expression = arguments.get("expression", "")
-        show_stack = arguments.get("show_stack", False)
-        result = session.evaluate(expression, show_stack)
-        if result["error"]:
-            return [TextContent(type="text", text=f"Error: {result['error']}")]
-        output = f"Result: {result['result']}"
-        if show_stack and result["stack"]:
-            output += f"\nStack: {result['stack']}"
-        return [TextContent(type="text", text=output)]
+@mcp.tool()
+def clear() -> str:
+    """Clear the RPN calculator stack.
 
-    elif name == "clear":
-        session.clear()
-        return [TextContent(type="text", text="Stack cleared")]
+    Removes all values from the current session stack.
 
-    else:
-        return [TextContent(type="text", text=f"Unknown tool: {name}")]
+    Returns:
+        Confirmation message that stack was cleared.
+
+    Example:
+        >>> clear()
+        'Stack cleared'
+    """
+    session.clear()
+    return "Stack cleared"
 
 
-async def main() -> None:
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream, write_stream, server.create_initialization_options()
-        )
+def main() -> None:
+    """Entry point for running the MCP server."""
+    mcp.run()
